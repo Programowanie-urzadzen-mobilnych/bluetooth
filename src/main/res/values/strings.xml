@@ -1,0 +1,15 @@
+<resources>
+
+    <string name="buttonTemp">Temperature</string>
+    <string name="buttonHum">Humidity</string>
+    <string name="buttonPress">Pressure</string>
+    <string name="buttonBAT_V">Battery Voltage</string>
+    <string name="buttonBAT_I">Battery Current</string>
+    <string name="buttonSOLAR_V">Solar Panel Voltage</string>
+    <string name="buttonSOLAR_I">Solar Panel Current</string>
+    <string name="buttonNODE_V">Node Voltage</string>
+    <string name="buttonNODE_I">Node Current</string>
+    <string name="buttonApply">Download</string>
+    <string name="buttonBack">Back </string>
+    <string name="buttonConnect">Connect </string>
+</resources>

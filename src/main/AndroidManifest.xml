@@ -1,2 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.bluetooth" />
+    package="com.example.bluetooth">
+
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+
+    <application>
+        <activity android:name=".DownloadFiles"></activity>
+        <activity android:name=".ConnectDevice" />
+    </application>
+
+</manifest>
