@@ -3,27 +3,27 @@ package com.example.bluetooth;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.app.DatePickerDialog;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
+import android.os.Handler;
+import android.os.ParcelUuid;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.CalendarView;
 import android.widget.DatePicker;
-import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TimePicker;
 import android.widget.Toast;
 
-import java.lang.annotation.Native;
-import java.sql.Time;
-import java.time.LocalDate;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.Calendar;
-import java.util.Date;
-import java.util.Timer;
+import java.util.Set;
 
 public class DownloadFiles extends AppCompatActivity {
 
@@ -34,6 +34,13 @@ public class DownloadFiles extends AppCompatActivity {
     public String variable;
     public LocalDateTime startTime;
     public LocalDateTime endTime;
+    private OutputStream outputStream;
+    private InputStream inStream;
+    Thread workerThread;
+    byte[] readBuffer;
+    int readBufferPosition;
+    volatile boolean stopWorker;
+    String dataReceived;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,39 +90,39 @@ public class DownloadFiles extends AppCompatActivity {
             switch (index){
                 case 0:
                     variable = "TEMP";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 1:
                     variable = "HUM";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 2:
                     variable = "PRESS";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 3:
                     variable = "BAT_V";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 4:
                     variable = "BAT_C";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 5:
                     variable = "SOLAR_V";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 6:
                     variable = "SOLAR_C";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 7:
                     variable = "NODE_V";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 case 8:
                     variable = "NODE_C";
-                    command =  "[\"get\", " + variable + ", "+ startTime + ", " + endTime + ":00]";
+                    command =  "{\"val\":[\"get\", \"" + variable + "\", \""+ startTime + ":00\", \"" + endTime + ":00\"]}";
                     break;
                 default:
                     command = null;
@@ -128,18 +135,112 @@ public class DownloadFiles extends AppCompatActivity {
             }
             if(command != null){
                 BluetoothAdapter blueAdapter = BluetoothAdapter.getDefaultAdapter();
-                System.out.println(command);
+                //System.out.println(command);
+
+                String deviceName = getIntent().getExtras().getString("deviceName");
+                if (blueAdapter != null) {
+                    if (blueAdapter.isEnabled()) {
+                        Set<BluetoothDevice> bondedDevices = blueAdapter.getBondedDevices();
+
+                        if(bondedDevices.size() > 0) {
+                            Object[] devices = (Object[]) bondedDevices.toArray();
+                            BluetoothDevice device = null;
+                            for (Object deviceBT : devices)
+                            {
+                                BluetoothDevice temp = (BluetoothDevice) deviceBT;
+                                if(temp.getName().equals(deviceName)){
+                                    device = temp;
+                                }
+                            }
+                            ParcelUuid[] uuids = device.getUuids();
+                            try {
+                                BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuids[0].getUuid());
+                                socket.connect();
+                                outputStream = socket.getOutputStream();
+                                inStream = socket.getInputStream();
+                                outputStream.write(command.getBytes());
+                                beginListenForData();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        Log.e("error", "No appropriate paired devices.");
+                    } else {
+                        Log.e("error", "Bluetooth is disabled.");
+                    }
+                }
             }
         }
     }
 
+
     @RequiresApi(api = Build.VERSION_CODES.O)
     public static LocalDateTime getDateFromDatePicker(DatePicker datePicker, TimePicker timePicker){
         int day = datePicker.getDayOfMonth();
-        int month = datePicker.getMonth();
+        int month = datePicker.getMonth()+1;
         int year = datePicker.getYear();
         int hour = timePicker.getHour();
         int minute = timePicker.getMinute();
         return LocalDateTime.of(year, month, day, hour, minute);
+    }
+
+    void beginListenForData() {
+        final Handler handler = new Handler();
+        final byte delimiter = 93; //This is the ASCII code for a newline character
+
+        stopWorker = false;
+        readBufferPosition = 0;
+        readBuffer = new byte[1024];
+        workerThread = new Thread(new Runnable() {
+            public void run() {
+                while(!Thread.currentThread().isInterrupted() && !stopWorker) {
+                    try {
+                        System.out.println("");
+
+                        int bytesAvailable = inStream.available();
+                        if(bytesAvailable > 0) {
+                            byte[] packetBytes = new byte[bytesAvailable];
+                            inStream.read(packetBytes);
+                            for(int i=0;i<bytesAvailable;i++) {
+                                byte b = packetBytes[i];
+                                if(b == delimiter) {
+                                    byte[] encodedBytes = new byte[readBufferPosition];
+                                    System.arraycopy(readBuffer, 0, encodedBytes, 0, encodedBytes.length);
+                                    final String data = new String(encodedBytes, "US-ASCII");
+                                    dataReceived = data;
+                                    handler.post(new Runnable() {
+                                        public void run() {
+                                            dataReceived += "]}";
+                                            // TODO: Tu możesz sobie wziąć dane
+                                            System.out.print(dataReceived);
+                                            try {
+                                                Thread.sleep(500);
+                                            }catch (InterruptedException e){
+                                                e.printStackTrace();
+                                            }
+                                            stopWorker = true;
+                                        }
+                                    });
+
+                                }else {
+                                   // System.out.println("Sout 5");
+                                    readBuffer[readBufferPosition++] = b;
+
+                                    //workerThread.interrupt();
+                                }
+
+                            }
+                        }
+                    }catch (IOException ex) {
+                        stopWorker = true;
+                    }
+                }
+
+
+            }
+        });
+
+        workerThread.start();
     }
 }
